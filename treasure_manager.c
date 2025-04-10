@@ -313,6 +313,10 @@ void list_treasures(const char* hunt_id,int index){
         }
     }
     free(ids);
+
+    char log_msg[MAX_MSG];
+    snprintf(log_msg, sizeof(log_msg), "Listed  hunt %s",hunt_id);
+    log_operation(hunt_id, log_msg);
 }
 
 void list_hunt(const char* hunt_id){
@@ -344,32 +348,111 @@ void list_hunt(const char* hunt_id){
     
 }
 
+void view_treasure(const char* hunt_id, const char* id){
+    char treasure_path[MAX_PATH];
+    snprintf(treasure_path, sizeof(treasure_path), "hunts/%s/treasure.bin", hunt_id);
+
+    int fd=open(treasure_path,O_RDONLY);
+    if(fd<0){
+        printf("Error opening file\n");
+        exit(6);
+    }
+
+    treasure t;
+    int view=0;
+    while(read(fd,&t,sizeof(treasure))==sizeof(treasure)){
+        if(t.id==atoi(id)){
+            printf("Treasure ID: %d; username: %s; GPS coordinates: latitude: %f, longitude %f; Clue: %s; Value: %d\n",t.id,t.username,t.gps.latitude,t.gps.longitude,t.clue,t.value);
+            view=1;
+        }   
+    }
+
+    char log_msg[MAX_MSG];
+    if(view){
+        snprintf(log_msg, sizeof(log_msg), "Viewed  treasure ID %s from hunt %s",id,hunt_id);
+        log_operation(hunt_id, log_msg);
+       
+    }
+    else{
+        printf("Treasure ID %s does not exist in hunt %s",id,hunt_id);
+        snprintf(log_msg, sizeof(log_msg), "Tried to view treasure ID %s in hunt, but it does not exist %s",id,hunt_id);
+        log_operation(hunt_id, log_msg);
+    }
+
+   
+}
+
+void remove_hunt(const char* hunt_id){
+    printf("Remove hunt option");
+}
+
+void remove_treasure(const char* hunt_id, const char* id){
+    printf("Remove treasure option");
+}
+
+void print_usage(const char* argv){
+    printf("Usage:\n");
+    printf("--add <hunt_id>\n");
+    printf("--list <hunt_id>\n");
+    printf("--view <hunt_id> <id>\n");
+    printf("--remove_treasure <hunt_id> <id>\n");
+    printf("--remove_hunt <hunt_id>\n");
+}
 
 int main(int argc, char *argv[]) {
     if (argc < 3) {
-        printf("Usage:\n");
-        printf("%s add <hunt_id>  -> add treasure to hunt\n", argv[0]);
+        print_usage(argv[0]);
         return 1;
     }
 
     if (strcmp(argv[1], "--add") == 0) {
-        if (argc == 3) {
-            // Add treasure
+        if(argc==3){
+              // Add treasure
             add_treasure(argv[2]);
-            
-        } else {
-            printf("Invalid number of arguments for the 'add' option.\n");
+        }
+        else{
+            print_usage(argv[0]);
             return 1;
         }
-    } else{ if(strcmp(argv[1],"--list")==0){
-                list_hunt(argv[2]);
-            }
-            else
-            {
-                printf("Unknown option '%s'.\n", argv[1]);
-                return 1;
-            }
-    }
-
+     
+    } else if(strcmp(argv[1],"--list")==0){
+                if(argc==3)
+                    list_hunt(argv[2]);
+                else {
+                    print_usage(argv[0]);
+                    return 1;
+                }
+            }else if(strcmp(argv[1],"--view"))
+                    {
+                        if (argc == 4) {
+                            view_treasure(argv[2],argv[3]);  
+                        } else {
+                            print_usage(argv[0]);
+                            return 1;
+                        }
+                    }
+                    else if(strcmp(argv[1],"--remove_treasure"))
+                        {
+                        if (argc == 4) {
+                            remove_treasure(argv[2],argv[3]);  
+                        } else {
+                            print_usage(argv[0]);
+                           return 1;
+                        }
+                        }
+                        else if(strcmp(argv[0],"--remove_hunt")){
+                            if(argc==3)
+                                remove_hunt(argv[2]);
+                            else{
+                                print_usage(argv[0]);
+                                return 1;
+                            }
+                        }
+                        else
+                        {
+                            printf("Unknown option '%s'.\n", argv[1]);
+                            print_usage(argv[0]);
+                            return 1;
+                        }
     return 0;
 }
