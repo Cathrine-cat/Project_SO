@@ -253,7 +253,7 @@ void add_treasure(const char* hunt_id) {
     
     int id=t->id;
 
-    if(write(fd,t,sizeof(treasure))<0){
+    if(write(fd,t,sizeof(treasure))!=sizeof(treasure)){
         free(t);
         close(fd);
         printf("Error writing in file\n");
@@ -283,17 +283,11 @@ void list_treasures(const char* hunt_id,int index){
         exit(6);
     }
 
-    struct stat treasure_stat = {0};
-    off_t treasure_size = 0;
-    if (stat(treasure_path, &treasure_stat) == 0) {
-        treasure_size = treasure_stat.st_size;
-    }
-
     treasure t;
 
     int* ids=NULL;
     int size_ids=0;
-    while(read(fd,&t,sizeof(treasure_size))==sizeof(treasure_size)){
+    while(read(fd,&t,sizeof(treasure))==sizeof(treasure)){
         int duplicate=0;
 
         for(int i=0;i<size_ids;i++){
@@ -307,12 +301,14 @@ void list_treasures(const char* hunt_id,int index){
             printf("%*s", index, "");
             printf("Treasure ID: %d\n",t.id);
             int* tmp = realloc(ids, (size_ids + 1) * sizeof(int));
-        if (!tmp) {
-            printf("Memory allocation failed\n");
-            free(ids);
-            close(fd);
-            return;
-        }
+            if (!tmp) {
+                printf("Memory alloc failed\n");
+                free(ids);
+                close(fd);
+                return;
+            }
+            ids = tmp;
+           ids[size_ids++] = t.id;
             ids[size_ids++]=t.id;
         }
     }
