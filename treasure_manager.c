@@ -382,6 +382,7 @@ void add_treasure(const char* hunt_id) {
 ====================================================================================================================================================
 */
 
+
 void list_treasures(const char* hunt_id,int index){
     char treasure_path[MAX_PATH];
     snprintf(treasure_path, sizeof(treasure_path), "%s/%s/%s",HUNTS_DIR,hunt_id,TREASURE_FILE);
@@ -401,9 +402,6 @@ void list_treasures(const char* hunt_id,int index){
 
     }
    
-    char log_msg[MAX_MSG];
-    snprintf(log_msg, sizeof(log_msg), "Listed  hunt %s",hunt_id);
-    log_operation(hunt_id, log_msg);
 }
 
 
@@ -413,6 +411,46 @@ void list_treasures(const char* hunt_id,int index){
                                 LIST  HUNT
 ====================================================================================================================================================
 */
+
+long int calculate_size(const char* hunt_path){
+
+    long int total_size=0;
+
+    DIR* directory=opendir(hunt_path);
+
+    if(directory==NULL){
+        printf("Error opening hunt directory\n");
+        exit(2);
+    }
+
+    struct dirent* entry;
+    char file_path[MAX_PATH*2];
+    struct stat info;
+
+    while((entry=readdir(directory))){
+        if(strcmp(entry->d_name,".")==0 || strcmp(entry->d_name,"..")==0){
+            continue;
+        }
+
+        snprintf(file_path,sizeof(file_path),"%s/%s",hunt_path,entry->d_name);
+
+        if(lstat(file_path,&info)<0){
+            printf("Error with lstat\n");
+            exit(10);
+        }
+
+        if(S_ISDIR(info.st_mode)){
+            total_size=total_size+calculate_size(file_path);
+        }
+        else{
+            total_size=total_size+info.st_size;
+        }
+
+    }
+
+    closedir(directory);
+    return total_size;
+}
 
 void list_hunt(const char* hunt_id){
     char hunt_path[MAX_PATH];
@@ -432,11 +470,16 @@ void list_hunt(const char* hunt_id){
 
     char output_line[MAX_LINE];
 
-    snprintf(output_line, sizeof(output_line), "%s  %ld bytes  [%.*s]  ", hunt_id,st.st_size,(int)(strlen(timestamp)-1),timestamp);
+    long int dir_size=calculate_size(hunt_path);
+
+    snprintf(output_line, sizeof(output_line), "%s  %ld bytes  [%.*s]  ", hunt_id,dir_size,(int)(strlen(timestamp)-1),timestamp);
 
     printf("%sTreasures:\n",output_line);
     list_treasures(hunt_id,strlen(output_line));
-    
+
+    char log_msg[MAX_MSG];
+    snprintf(log_msg, sizeof(log_msg), "Listed  hunt %s",hunt_id);
+    log_operation(hunt_id, log_msg);
 }
 
 
