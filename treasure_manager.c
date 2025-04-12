@@ -365,39 +365,13 @@ void list_treasures(const char* hunt_id,int index){
 
     treasure t;
 
-    /*int* ids=NULL;
-    int size_ids=0;*/
     while(read(fd,&t,sizeof(treasure))==sizeof(treasure)){
-        /*int duplicate=0;
-
-        for(int i=0;i<size_ids;i++){
-            if(ids[i]==t.id){
-                duplicate=1;
-                break;
-            }
-        }
-
-        if(duplicate==0){//not duplicate
-            printf("%*s", index, "");
-            printf("Treasure ID: %d\n",t.id);
-            int* tmp = realloc(ids, (size_ids + 1) * sizeof(int));
-            if (!tmp) {
-                printf("Memory alloc failed\n");
-                free(ids);
-                close(fd);
-                return;
-            }
-            ids = tmp;
-           ids[size_ids++] = t.id;
-            ids[size_ids++]=t.id;
-        }*/
 
         printf("%*s", index, "");
         printf("Treasure ID: %d\n",t.id);
 
     }
-   // free(ids);
-
+   
     char log_msg[MAX_MSG];
     snprintf(log_msg, sizeof(log_msg), "Listed  hunt %s",hunt_id);
     log_operation(hunt_id, log_msg);
@@ -518,21 +492,78 @@ void remove_hunt(const char* hunt_id){
     }
 
     char sym_link[MAX_PATH];
-    snprintf(sym_link,sizeof(sym_link),"logged_hunt-/%s",hunt_id);
+    snprintf(sym_link,sizeof(sym_link),"logged_hunt-%s",hunt_id);
 
-    if (stat(sym_link, &st) != -1) {
+    if (lstat(sym_link, &st) != -1) {
+        if (S_ISLNK(st.st_mode)) { 
         if(unlink(sym_link)){
             printf("Failed to remove symbolic link\n");
             exit(6);
         }
+    }
        
     }
     printf("Hunt %s removed successfully\n",hunt_id);
     
 }
 
-void remove_treasure(const char* hunt_id, const char* id){
-   
+void remove_treasure(const char* hunt_id, char* treasure_id){
+    int id;
+   if(is_valid_natural_number(treasure_id)){
+        id=atoi(treasure_id);
+   }
+   else{
+    printf("The treasure id entered is not valid.\nPlease enter a valid treasure id (a natural number)\n");
+    return;
+   }
+   char treasure_path[MAX_PATH];
+   snprintf(treasure_path,sizeof(treasure_path),"hunts/%s/treasure.bin",hunt_id);
+
+   int fd=open(treasure_path,O_RDWR);
+   if(fd<0){
+    printf("Error opening treasure file\n");
+    exit(7);
+   }
+
+   treasure t;
+   off_t read_pos=0;
+   off_t write_pos=0;
+   int found=0;
+   int new_id=1;
+
+   while(read(fd,&t,sizeof(treasure))==sizeof(treasure)){
+        if(t.id==id && !found){//found treasure
+            found=1;
+            write_pos=read_pos;
+        }
+        else{
+            if (found) {
+                t.id = new_id++;
+                lseek(fd, write_pos, SEEK_SET);
+                write(fd, &t, sizeof(treasure));
+                write_pos += sizeof(treasure);
+            } 
+            else{
+                t.id=new_id++;
+            }
+        }
+        read_pos=read_pos+sizeof(treasure);
+        lseek(fd,read_pos,SEEK_SET);
+   }
+
+   if(found){
+        ftruncate(fd,write_pos);
+        char log_msg[MAX_MSG];
+        snprintf(log_msg, sizeof(log_msg), "Removed treasure with ID %d from hunt %s", id, hunt_id);
+        log_operation(hunt_id,log_msg);
+        printf("Removed treasure successfully\n");
+   }
+   else{
+        printf("Treasure with id %d not found\n",id);
+   }
+
+   close(fd);
+
 }
 
 void print_usage(const char* prg_name){
