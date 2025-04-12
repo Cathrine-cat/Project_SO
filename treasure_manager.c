@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <dirent.h>
 
 #define MAX_PATH 256
 #define MAX_USERNAME 40
@@ -475,11 +476,63 @@ void view_treasure(const char* hunt_id, const char* id){
 }
 
 void remove_hunt(const char* hunt_id){
-    printf("Remove hunt option");
+    char hunt_path[MAX_PATH];
+    snprintf(hunt_path, sizeof(hunt_path), "hunts/%s", hunt_id);
+
+    struct stat st={0};
+    if(stat(hunt_path,&st)==-1){
+        printf("No such directory\n");
+        return;
+    }
+
+    DIR* directory=opendir(hunt_path);
+
+    if(directory==NULL){
+        printf("Error opening hunt directory\n");
+        exit(6);
+    }
+
+    struct dirent* entry;
+    char file_path[MAX_PATH*2];
+
+    while((entry=readdir(directory))){
+        if(strcmp(entry->d_name,".")==0 || strcmp(entry->d_name,"..")==0){
+            continue;
+        }
+
+        snprintf(file_path,sizeof(file_path),"%s/%s",hunt_path,entry->d_name);
+
+        if(unlink(file_path)){
+            printf("Failed to remove hunt\n");
+            printf("%s\n",file_path);
+            closedir(directory);
+            exit(6);
+        }
+    }
+
+    closedir(directory);
+
+    if(rmdir(hunt_path)){
+        printf("Failed to remove hunt\n");
+        exit(6);
+    }
+
+    char sym_link[MAX_PATH];
+    snprintf(sym_link,sizeof(sym_link),"logged_hunt-/%s",hunt_id);
+
+    if (stat(sym_link, &st) != -1) {
+        if(unlink(sym_link)){
+            printf("Failed to remove symbolic link\n");
+            exit(6);
+        }
+       
+    }
+    printf("Hunt %s removed successfully\n",hunt_id);
+    
 }
 
 void remove_treasure(const char* hunt_id, const char* id){
-    printf("Remove treasure option");
+   
 }
 
 void print_usage(const char* prg_name){
