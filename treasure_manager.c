@@ -16,6 +16,8 @@
 #define MAX_LINE 100 //max length of line in log
 #define HUNTS_DIR "hunts" //name of hunts directory
 #define TREASURE_FILE "treasure.bin" //name of treasure file in each hunt
+#define HUNT_DIR_NAME "hunt"//pattern for hunt directory
+#define LOG_NAME "logged_hunt"//name pattern of log-symlink
 
 
 //Treasure structure
@@ -39,7 +41,7 @@ typedef struct _treasure{
 void create_hunts(){
     struct stat st = {0};
     if (stat(HUNTS_DIR, &st) == -1) {//if hunts directory doesn't exist
-        if(mkdir("hunts", 0700)){//try to create it 
+        if(mkdir(HUNTS_DIR, 0700)){//try to create it 
             printf("Error creating hunts dir\n");
             exit(9);
         }
@@ -48,7 +50,7 @@ void create_hunts(){
 
 
 void not_valid_hunt_id(){
-    printf("That is not a valid hunt_id\nA valid hunt_id is of the form: hunt[natural number]\n");
+    printf("That is not a valid hunt_id\nA valid hunt_id is of the form: %s[natural number]\n",HUNT_DIR_NAME);
     printf("Please enter a valid hunt_id or an existing one\n");
 }
 
@@ -56,14 +58,14 @@ void not_valid_hunt_id(){
 //Check if hunt_id is valid. 
 //Decided form of hide_id : hunt[number]. Example:hunt1, hunt2...
 int valid_hunt_id(const char* hunt_id){
-    const char* prefix="hunt";
+    const char* prefix=HUNT_DIR_NAME;
     
-    if(strncmp(hunt_id,prefix,strlen("hunt")!=0)){
+    if(strncmp(hunt_id,prefix,strlen(HUNT_DIR_NAME)!=0)){
         not_valid_hunt_id();
         return 0;
     }
 
-    const char* digits=hunt_id+strlen("hunt");
+    const char* digits=hunt_id+strlen(HUNT_DIR_NAME);
     if(*digits=='\0'){
         not_valid_hunt_id();
         return 0;
@@ -103,6 +105,52 @@ int proceed()
 
 /*
 ====================================================================================================================================================
+                                LOG OPERATION
+====================================================================================================================================================
+*/
+
+void log_operation(const char* hunt_id, const char* message){
+    char path[256];
+    if(hunt_id!=NULL){
+        snprintf(path, sizeof(path), "%s/%s/%s.logs",HUNTS_DIR,hunt_id,hunt_id);
+    }
+    else{
+        snprintf(path, sizeof(path), "%s/general.logs",HUNTS_DIR);
+    }
+    int fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0644);//open log file
+    if (fd < 0) {
+        printf("Error opening log file\n");
+        exit(1);
+    }
+
+    time_t now = time(NULL);
+    char *timestamp = ctime(&now);
+    dprintf(fd, "[%.*s] %s\n", (int)(strlen(timestamp) - 1), timestamp, message);
+    close(fd);
+
+
+    if(hunt_id!=NULL){
+        //create symlink
+        char symlink_name[MAX_PATH];
+        snprintf(symlink_name, sizeof(symlink_name), "%s-%s",LOG_NAME,hunt_id);
+
+        struct stat st={0};
+        if(lstat(symlink_name,&st)==-1){//symlink does not yet exist 
+            if(symlink(path, symlink_name)!=0){//create->if fail 
+                printf("Error creating symbolic link\n");//fail message
+                exit(9);
+            }
+        }
+    }
+   
+}
+
+
+
+
+
+/*
+====================================================================================================================================================
                                 CREATE HUNT FROM GIVEN HUNT_ID
 ====================================================================================================================================================
 */
@@ -121,6 +169,11 @@ void create_hunt(const char* hunt_id) {
                     printf("Error creating hunt directory\n");
                     exit(9);
                 }
+                else{
+                    char log_msg[MAX_MSG];
+                    snprintf(log_msg, sizeof(log_msg), "Created hunt %s", hunt_id);
+                    log_operation(NULL,log_msg);//general log
+                }
             }
             else{
                 exit(0);//user decided to not create the directory
@@ -132,41 +185,6 @@ void create_hunt(const char* hunt_id) {
 }
 
 
-
-
-/*
-====================================================================================================================================================
-                                LOG OPERATION
-====================================================================================================================================================
-*/
-
-void log_operation( const char* hunt_id, const char* message){
-    char path[256];
-    snprintf(path, sizeof(path), "%s/%s/%s.logs",HUNTS_DIR,hunt_id,hunt_id);
-    int fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0644);//open log file
-    if (fd < 0) {
-        printf("Error opening log file\n");
-        exit(1);
-    }
-
-    time_t now = time(NULL);
-    char *timestamp = ctime(&now);
-    dprintf(fd, "[%.*s] %s\n", (int)(strlen(timestamp) - 1), timestamp, message);
-    close(fd);
-
-    //create symlink
-    char symlink_name[MAX_PATH];
-    snprintf(symlink_name, sizeof(symlink_name), "logged_hunt-%s", hunt_id);
-
-    struct stat st={0};
-    if(lstat(symlink_name,&st)==-1){//symlink does not yet exist 
-        if(symlink(path, symlink_name)!=0){//create->if fail 
-            printf("Error creating symbolic link\n");//fail message
-            exit(9);
-        }
-    }
-   
-}
 
 
 int is_valid_natural_number(char *input) {
@@ -368,7 +386,8 @@ void add_treasure(const char* hunt_id) {
 
     char log_msg[MAX_MSG];
     snprintf(log_msg, sizeof(log_msg), "Added treasure ID %d to hunt %s", id, hunt_id);
-    log_operation(hunt_id, log_msg);
+    log_operation(hunt_id, log_msg);//normal log
+    log_operation(NULL,log_msg);//general log
 
 }
 
@@ -479,7 +498,8 @@ void list_hunt(const char* hunt_id){
 
     char log_msg[MAX_MSG];
     snprintf(log_msg, sizeof(log_msg), "Listed  hunt %s",hunt_id);
-    log_operation(hunt_id, log_msg);
+    log_operation(hunt_id, log_msg);//normal log
+    log_operation(NULL,log_msg);//general log
 }
 
 
@@ -599,7 +619,7 @@ void remove_hunt(const char* hunt_id){
     }
 
     char sym_link[MAX_PATH];
-    snprintf(sym_link,sizeof(sym_link),"logged_hunt-%s",hunt_id);
+    snprintf(sym_link,sizeof(sym_link),"%s-%s",LOG_NAME,hunt_id);
 
     if (lstat(sym_link, &st) != -1) {
         if (S_ISLNK(st.st_mode)) { 
@@ -610,6 +630,9 @@ void remove_hunt(const char* hunt_id){
     }
        
     }
+    char log_msg[MAX_MSG];
+    snprintf(log_msg, sizeof(log_msg), "Removed hunt %s",hunt_id);
+    log_operation(NULL,log_msg);//general log
     printf("Hunt %s removed successfully\n",hunt_id);
     
 }
@@ -679,6 +702,7 @@ void remove_treasure(const char* hunt_id, char* treasure_id){
         snprintf(log_msg, sizeof(log_msg), "Removed treasure with ID %d from hunt %s", id, hunt_id);
         //log operarion
         log_operation(hunt_id,log_msg);
+        log_operation(NULL,log_msg);
         printf("Removed treasure successfully\n");
    }
    else{
