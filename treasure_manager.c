@@ -737,6 +737,9 @@ void print_usage(const char* prg_name){
 
 //Handle options of program
 int main(int argc, char *argv[]) {
+
+    setvbuf(stdout, NULL, _IONBF, 0);
+
     if (argc < 3) {
         print_usage(argv[0]);
         return 1;
