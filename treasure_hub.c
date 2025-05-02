@@ -37,8 +37,6 @@ typedef struct _treasure{
 }treasure;
 
 
-
-
 void handler_sigchild(int sig) {
     int saved = errno, status;
     while (waitpid(-1, &status, WNOHANG) > 0) {
@@ -57,8 +55,6 @@ void handle_sigusr1(int sig) {
 void handle_sigterm(int sig) {
     stop_requested = 1;
 }
-
-
 
 void setup_monitor_signals() {
     struct sigaction sa = {0};
@@ -84,6 +80,7 @@ void ensure_compiled() {
 }
 
 
+//Count treasures inside a hunt 
 int count_treasures(const char* hunt_id){
     int count=0;
     char treasure_path[MAX_PATH];
@@ -106,8 +103,7 @@ int count_treasures(const char* hunt_id){
 }
 
 
-//function to parse hunts directory and count no. of treasures in each hunt
-//treasure_manager doesnt have this function so its defined here
+//Parse hunts directory
 void list_hunts(){
     DIR* directory=opendir(HUNTS_DIR);
 
@@ -159,13 +155,14 @@ void process_command() {
     line[strcspn(line, "\n")] = 0;
 
 
-    if(strcmp(line,"-list_hunts") == 0){
+    if(strcmp(line,"-list_hunts") == 0){//use function defined here
         printf("List_hunts\n");
         list_hunts();
     }
-    else{ //use treasure manager 
+    else{ //run treasure manager 
         ensure_compiled();
 
+        //devide command to be given into arguments to use with execvp
         char* argv[10];
         int argc = 0;
     
@@ -238,7 +235,7 @@ int main() {
 
         if (strcmp(input, "start_monitor") == 0) {
             if (monitor_pid != -1) {
-                puts("Monitor already running.");
+                printf("Monitor already running.\n");
             } else {
                 monitor_pid = fork();
                 if (monitor_pid == 0) {
@@ -250,9 +247,9 @@ int main() {
                 
             }
         }
-        else if (strncmp(input, "list_treasures", 14) == 0) {
+        else if (strncmp(input, "list_treasures", 14) == 0 && ( input[14] == ' ' || input[14] =='\0')) {
             if (monitor_pid == -1) {
-                puts("Error: monitor is not running.");
+                printf("Error: monitor is not running.");
             } else {
                 char hunt[64];
                 // parse out the hunt_id
@@ -265,13 +262,13 @@ int main() {
                     kill(monitor_pid, SIGUSR1);
                     while (!command_done) pause();
                 } else {
-                    puts("Usage: list_treasures <hunt_id>");
+                    printf("Usage: list_treasures <hunt_id>\n");
                 }
             }
         }
-        else if (strncmp(input, "view_treasure", 13) == 0) {
+        else if (strncmp(input, "view_treasure", 13) == 0 && ( input[13]==' ' || input[13]=='\0')) {
             if (monitor_pid == -1) {
-                puts("Error: monitor is not running.");
+                printf("Error: monitor is not running.\n");
             } else {
                 char hunt[64], tid[64];
                 
@@ -284,13 +281,13 @@ int main() {
                     kill(monitor_pid, SIGUSR1);
                     while (!command_done) pause();
                 } else {
-                    puts("Usage: view_treasure <hunt_id> <treasure_id>");
+                    printf("Usage: view_treasure <hunt_id> <treasure_id>\n");
                 }
             }
         }
-        else if(strncmp(input, "list_hunts", 10)==0){
+        else if(strcmp(input, "list_hunts")==0){
             if(monitor_pid == -1){
-                puts("Error: monitor is not running.");
+                printf("Error: monitor is not running.");
             } else {
                 FILE* f = fopen(CMD_FILE, "w");
                     fprintf(f, "-list_hunts\n");
@@ -303,18 +300,18 @@ int main() {
         }
         else if (strcmp(input, "stop_monitor") == 0) {
             if (monitor_pid == -1) {
-                puts("No monitor running.");
+                printf("No monitor running.");
             } else {
                 kill(monitor_pid, SIGTERM);
                 monitor_pid = -1;
-                 printf("Monitor stopped.\n");
+                printf("Monitor stopped.\n");
         fflush(stdout);
         continue;  
             }
         }
         else if (strcmp(input, "exit") == 0) {
             if (monitor_pid != -1) {
-                puts("Stop the monitor first.");
+                printf("Stop the monitor first.\n");
             } else {
                 unlink(CMD_FILE);
                 rmdir("tmp");
