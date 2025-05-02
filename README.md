@@ -1,3 +1,4 @@
+```text
 TREASURE MANAGER
 Application for managing treasure hunts
 
@@ -43,3 +44,5 @@ This deletes the treasure file and the log file. It also removes the symbolic li
 -Log operation: logs every operation performed. 
 This function creates a log file. It can create a log file for a specific hunt inside that directory and a symbolic link to it in the root. There it writes all operations performed on a specific hunt.
 It can also create and write into a general logs file, that tracks all operations performed, including the creation and deletion of hunts.
+```
+``
