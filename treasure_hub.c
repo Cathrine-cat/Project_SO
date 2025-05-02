@@ -7,13 +7,35 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <termios.h>
+#include <fcntl.h>
+#include <dirent.h>
 
 #define CMD_FILE "tmp/monitor_cmd.txt"
+#define HUNTS_DIR "hunts" //name of hunts directory
+#define TREASURE_FILE "treasure.bin" //name of treasure file in each hunt
+#define HUNT_DIR_NAME "hunt"//pattern for hunt directory
+#define MAX_USERNAME 40
+#define MAX_CLUE 100
+#define MAX_PATH 256 //max size of file path
 
 pid_t monitor_pid = -1;
 volatile sig_atomic_t got_command    = 0; 
 volatile sig_atomic_t stop_requested = 0; 
 volatile sig_atomic_t command_done   = 0;
+
+
+//Treasure structure
+typedef struct _treasure{
+    int id;
+    char username[MAX_USERNAME];
+    struct gps_coord{
+        float latitude;
+        float longitude;
+    }gps;
+    char clue[MAX_CLUE];
+    int value;
+}treasure;
+
 
 
 
@@ -61,6 +83,69 @@ void ensure_compiled() {
     }
 }
 
+
+int count_treasures(const char* hunt_id){
+    int count=0;
+    char treasure_path[MAX_PATH];
+    snprintf(treasure_path, sizeof(treasure_path), "%s/%s/%s",HUNTS_DIR,hunt_id,TREASURE_FILE);
+
+    int fd=open(treasure_path,O_RDONLY);
+    if(fd<0){
+        printf("Error opening file\n");
+        exit(1);
+    }
+
+    treasure t;
+
+    while(read(fd,&t,sizeof(treasure))==sizeof(treasure)){
+        count++;
+    }
+
+    return count;
+   
+}
+
+
+//function to parse hunts directory and count no. of treasures in each hunt
+//treasure_manager doesnt have this function so its defined here
+void list_hunts(){
+    DIR* directory=opendir(HUNTS_DIR);
+
+    if(directory==NULL){
+        printf("Error opening hunts directory\n");
+        exit(2);
+    }
+
+    printf("Hunts:\n");
+
+    struct dirent* entry;
+    char file_path[MAX_PATH*2];
+    struct stat info;
+
+    while((entry=readdir(directory))){
+        if(strcmp(entry->d_name,".")==0 || strcmp(entry->d_name,"..")==0){
+            continue;
+        }
+
+        snprintf(file_path,sizeof(file_path),"%s/%s",HUNTS_DIR,entry->d_name);
+
+        if(lstat(file_path,&info)<0){
+            printf("Error with lstat\n");
+            exit(2);
+        }
+
+        if(S_ISDIR(info.st_mode)){//in hunt directory
+
+            //open treasure.bin + count treasures
+            printf("%s with %d treasures\n",entry->d_name, count_treasures(entry->d_name));
+        }
+        
+
+    }
+
+    closedir(directory);
+}
+
 void process_command() {
     FILE* f = fopen(CMD_FILE, "r");
     if (!f) { perror("[Monitor] fopen"); return; }
@@ -73,34 +158,37 @@ void process_command() {
     fclose(f);
     line[strcspn(line, "\n")] = 0;
 
-    ensure_compiled();
 
-    char* argv[10];
-    int argc = 0;
-
-    argv[argc++] = "./treasure_manager";
-
-    char* token = strtok(line, " ");
-    while (token && argc < 9) {
-        argv[argc++] = token;
-        token = strtok(NULL, " ");
+    if(strcmp(line,"-list_hunts") == 0){
+        printf("List_hunts\n");
+        list_hunts();
     }
-    argv[argc] = NULL;
+    else{ //use treasure manager 
+        ensure_compiled();
 
-    for(int i=0;i<argc;i++){
-        printf("fff %s\n",argv[i]);
-    }
-
-    pid_t pid = fork();
-    if (pid == 0) {
-        
-        execvp(argv[0],argv);
-        perror("[Monitor] execvp");
-        _exit(127);
-    } else if (pid > 0) {
-        waitpid(pid, NULL, 0);
-    } else {
-        perror("[Monitor] fork");
+        char* argv[10];
+        int argc = 0;
+    
+        argv[argc++] = "./treasure_manager";
+    
+        char* token = strtok(line, " ");
+        while (token && argc < 9) {
+            argv[argc++] = token;
+            token = strtok(NULL, " ");
+        }
+        argv[argc] = NULL;
+    
+        pid_t pid = fork();
+        if (pid == 0) {
+            
+            execvp(argv[0],argv);
+            perror("[Monitor] execvp");
+            exit(127);
+        } else if (pid > 0) {
+            waitpid(pid, NULL, 0);
+        } else {
+            perror("[Monitor] fork");
+        }
     }
 
     kill(getppid(), SIGUSR2);
@@ -118,7 +206,6 @@ void monitor_loop() {
     }
     
     usleep(500000);
-    //printf("[Monitor] exiting\n");
     exit(0);
 }
 
@@ -163,36 +250,6 @@ int main() {
                 
             }
         }
-        /*else if (strncmp(input, "list_hunts", 10) == 0
-              || strncmp(input, "list_treasures", 14) == 0
-              || strncmp(input, "view_treasure", 13) == 0) {
-            if (monitor_pid == -1) {
-                puts("Error: monitor is not running.");
-            } else {
-
-                
-                char buf[256];
-                if(strncmp(input, "view_treasure", 13)==0) {
-                    char hunt[64], tid[64];
-                    sscanf(input + 13, "%s %s", hunt, tid);
-                    snprintf(buf, sizeof(buf), "-view %s %s", hunt, tid);
-                }
-                if(strncmp(input, "list_treasures", 14)==0){
-                    char buf[256];
-                    snprintf(buf, sizeof(buf), "-list %s", input + 14);
-                }
-
-                printf("Buf is %s \n",buf);
-                FILE* f = fopen(CMD_FILE, "w");
-                fprintf(f, "%s\n", buf);
-                fclose(f);
-                
-                command_done = 0;
-                kill(monitor_pid, SIGUSR1);
-
-                while (!command_done) pause();
-            }
-        }*/
         else if (strncmp(input, "list_treasures", 14) == 0) {
             if (monitor_pid == -1) {
                 puts("Error: monitor is not running.");
@@ -201,7 +258,7 @@ int main() {
                 // parse out the hunt_id
                 if (sscanf(input + 14, " %63s", hunt) == 1) {
                     FILE* f = fopen(CMD_FILE, "w");
-                    fprintf(f, "-list %s\n", hunt);
+                    fprintf(f, "-list %s", hunt);
                     fclose(f);
     
                     command_done = 0;
@@ -217,10 +274,10 @@ int main() {
                 puts("Error: monitor is not running.");
             } else {
                 char hunt[64], tid[64];
-                // parse hunt_id and treasure_id
+                
                 if (sscanf(input + 13, " %63s %63s", hunt, tid) == 2) {
                     FILE* f = fopen(CMD_FILE, "w");
-                    fprintf(f, "-view %s %s\n", hunt, tid);
+                    fprintf(f, "-view %s %s", hunt, tid);
                     fclose(f);
     
                     command_done = 0;
@@ -229,6 +286,19 @@ int main() {
                 } else {
                     puts("Usage: view_treasure <hunt_id> <treasure_id>");
                 }
+            }
+        }
+        else if(strncmp(input, "list_hunts", 10)==0){
+            if(monitor_pid == -1){
+                puts("Error: monitor is not running.");
+            } else {
+                FILE* f = fopen(CMD_FILE, "w");
+                    fprintf(f, "-list_hunts\n");
+                    fclose(f);
+    
+                    command_done = 0;
+                    kill(monitor_pid, SIGUSR1);
+                    while (!command_done) pause();
             }
         }
         else if (strcmp(input, "stop_monitor") == 0) {
