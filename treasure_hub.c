@@ -39,6 +39,12 @@ typedef struct _treasure{
 }treasure;
 
 
+
+typedef enum list_or_score{
+    list_hunt, calculate_score
+}option_list_or_score;
+
+
 void handler_sigchild(int sig) {
     int saved = errno, status;
     while (waitpid(-1, &status, WNOHANG) > 0) {
@@ -90,12 +96,10 @@ void ensure_compiled(char* s) {
 
 
 //Count treasures inside a hunt 
-int count_treasures(const char* hunt_id){
+int count_treasures(char* path){
     int count=0;
-    char treasure_path[MAX_PATH];
-    snprintf(treasure_path, sizeof(treasure_path), "%s/%s/%s",HUNTS_DIR,hunt_id,TREASURE_FILE);
 
-    int fd=open(treasure_path,O_RDONLY);
+    int fd=open(path,O_RDONLY);
     if(fd<0){
         printf("Error opening file\n");
         exit(1);
@@ -134,7 +138,7 @@ void print_from_pipe(int pipefd[2]){
 }
 
 
-void parse_hunts_dir(){
+/*void parse_hunts_dir(){
     DIR* dir = opendir(HUNTS_DIR);
     if (!dir) {
         perror("opendir");
@@ -171,11 +175,87 @@ void parse_hunts_dir(){
             }
         }
     closedir(dir);
+}*/
+
+void calc_scores_for_each(char* path){
+    int pfd[2];
+    if (pipe(pfd) == -1) {
+        perror("pipe");
+        return;
+    }
+    pid_t pid = fork();
+    if (pid == 0) {
+    close(pfd[0]); // Child writes
+    dup2(pfd[1], STDOUT_FILENO);
+    close(pfd[1]);
+
+    ensure_compiled("calculate_score");
+
+    execlp("./calculate_score", "calculate_score", path, NULL);
+    perror("execlp");
+    exit(1);
+    } else if (pid > 0) {
+        close(pfd[1]); // Parent reads
+        waitpid(pid, NULL, 0);
+        print_from_pipe(pfd);
+        close(pfd[0]);
+    }
+}
+
+void function(char* hunt,option_list_or_score o){
+
+    char file_path[MAX_PATH];
+    snprintf(file_path,sizeof(file_path),"%s/%s/%s",HUNTS_DIR,hunt,TREASURE_FILE);
+
+    if(o == list_hunt){
+        printf("%s with %d treasures\n",hunt, count_treasures(file_path));
+    }
+    else{
+        calc_scores_for_each(file_path);
+    }
+}
+
+
+void parse_hunts_dir(option_list_or_score o){
+    DIR* directory=opendir(HUNTS_DIR);
+
+    if(directory==NULL){
+        printf("Error opening hunts directory\n");
+        return;
+    }
+
+    struct dirent* entry;
+    char file_path[MAX_PATH];
+    struct stat info;
+
+    while((entry=readdir(directory))){
+        if(strcmp(entry->d_name,".")==0 || strcmp(entry->d_name,"..")==0){
+            continue;
+        }
+
+        snprintf(file_path,sizeof(file_path),"%s/%.*s",HUNTS_DIR,MAX_PATH/2,entry->d_name);
+
+        if(lstat(file_path,&info)<0){
+            printf("Error with lstat\n");
+            exit(2);
+        }
+
+        if(S_ISDIR(info.st_mode)){//in hunt directory
+
+            //printf("rr entry->d_name %s\n",entry->d_name);
+            
+            function(entry->d_name,o);
+        }
+        
+
+    }
+
+    closedir(directory);
 }
 
 
 //Parse hunts directory
-void list_hunts(){
+/*void list_hunts(){
     DIR* directory=opendir(HUNTS_DIR);
 
     if(directory==NULL){
@@ -211,7 +291,7 @@ void list_hunts(){
     }
 
     closedir(directory);
-}
+}*/
 
 void process_command() {
     FILE* f = fopen(CMD_FILE, "r");
@@ -227,11 +307,11 @@ void process_command() {
 
     if(strcmp(line,"-calculate_score")==0){
         printf("Scores are:\n");
-        parse_hunts_dir();
+        parse_hunts_dir(calculate_score);
     }
     else if(strcmp(line,"-list_hunts") == 0){//use function defined here
-        printf("List_hunts\n");
-        list_hunts();
+        printf("Hunts:\n");
+        parse_hunts_dir(list_hunt);
     }
     else{ //run treasure manager 
         ensure_compiled("treasure_manager");

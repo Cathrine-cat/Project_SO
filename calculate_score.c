@@ -30,14 +30,8 @@ typedef struct {
 #define MAX_USERS 100
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s <hunt_id>\n", argv[0]);
-        return 1;
-    }
-
-    char filepath[MAX_PATH];
-    snprintf(filepath, sizeof(filepath), "%s/%s/%s", HUNTS_DIR,argv[1],TREASURE_FILE);
-    int fd = open(filepath, O_RDONLY);
+   
+    int fd = open(argv[1], O_RDONLY);
     if (fd < 0) {
         perror("open");
         return 1;
