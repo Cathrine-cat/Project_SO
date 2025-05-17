@@ -269,12 +269,13 @@ void process_command() {
 void monitor_loop(int write_fd) {
     setup_monitor_signals();
 
+    printf("[Monitor] PID %d ready\n", getpid());
+
     dup2(write_fd,STDOUT_FILENO);
     close(write_fd);
 
     setbuf(stdout, NULL);
 
-    printf("[Monitor] PID %d ready\n", getpid());
     while (!stop_requested) {
         pause();
 
@@ -426,19 +427,19 @@ int main() {
                 break;
             }
         }
-        else if(strcmp(input,"calculate_scores")==0){
+        else if(strncmp(input,"calculate_scores",16)==0){
             if(monitor_pid == -1){
                 printf("Error: monitor is not running.\n");
             } else {
                 FILE* f = fopen(CMD_FILE, "w");
-                    fprintf(f, "-calculate_score\n");
-                    fclose(f);
+                fprintf(f, "-calculate_score\n");
+                fclose(f);
     
-                    command_done = 0;
-                    kill(monitor_pid, SIGUSR1);
-                    while (!command_done) pause();
+                command_done = 0;
+                kill(monitor_pid, SIGUSR1);
+                while (!command_done) pause();
 
-                    print_from_pipe(pipefd);
+                print_from_pipe(pipefd);
             }
         }
         else {

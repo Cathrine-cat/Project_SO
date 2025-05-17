@@ -5,8 +5,11 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#define MAX_PATH 256 //max size of file path
 #define MAX_USERNAME 40
 #define MAX_CLUE 100
+#define HUNTS_DIR "hunts" //name of hunts directory
+#define TREASURE_FILE "treasure.bin" //name of treasure file in each hunt
 
 typedef struct _treasure {
     int id;
@@ -32,8 +35,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    char filepath[256];
-    snprintf(filepath, sizeof(filepath), "hunts/%s/treasure.bin", argv[1]);
+    char filepath[MAX_PATH];
+    snprintf(filepath, sizeof(filepath), "%s/%s/%s", HUNTS_DIR,argv[1],TREASURE_FILE);
     int fd = open(filepath, O_RDONLY);
     if (fd < 0) {
         perror("open");
