@@ -21,7 +21,6 @@ int main(int argc, char* argv[]) {
     }
 
     treasure t;
-    //user_score scores[MAX_USERS];
     user_score* scores=(user_score*)malloc(sizeof(user_score));
 
     if(!scores){
