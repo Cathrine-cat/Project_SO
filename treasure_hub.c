@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,34 +9,15 @@
 #include <termios.h>
 #include <fcntl.h>
 #include <dirent.h>
+#include "treasure.h"
 
 #define CMD_FILE "tmp/monitor_cmd.txt"
-#define HUNTS_DIR "hunts" //name of hunts directory
-#define TREASURE_FILE "treasure.bin" //name of treasure file in each hunt
-#define HUNT_DIR_NAME "hunt"//pattern for hunt directory
-#define MAX_USERNAME 40
-#define MAX_CLUE 100
-#define MAX_PATH 256 //max size of file path
-#define MAX_SIZE_BUF 1024
+#define MAX_SIZE_BUF 1024 //max bytes to read from pipe
 
 pid_t monitor_pid = -1;
 volatile sig_atomic_t got_command    = 0; 
 volatile sig_atomic_t stop_requested = 0; 
 volatile sig_atomic_t command_done   = 0;
-
-
-//Treasure structure
-typedef struct _treasure{
-    int id;
-    char username[MAX_USERNAME];
-    struct gps_coord{
-        float latitude;
-        float longitude;
-    }gps;
-    char clue[MAX_CLUE];
-    int value;
-}treasure;
-
 
 
 typedef enum list_or_score{
@@ -138,45 +118,6 @@ void print_from_pipe(int pipefd[2]){
 }
 
 
-/*void parse_hunts_dir(){
-    DIR* dir = opendir(HUNTS_DIR);
-    if (!dir) {
-        perror("opendir");
-        return;
-    }
-
-    struct dirent* entry;
-    while ((entry = readdir(dir))) {
-        if (entry->d_type != DT_DIR || 
-            strcmp(entry->d_name, ".") == 0 || 
-            strcmp(entry->d_name, "..") == 0) continue;
-
-            int pfd[2];
-            if (pipe(pfd) == -1) {
-                perror("pipe");
-                continue;
-            }
-            pid_t pid = fork();
-            if (pid == 0) {
-                close(pfd[0]); // Child writes
-                dup2(pfd[1], STDOUT_FILENO);
-                close(pfd[1]);
-
-                ensure_compiled("calculate_score");
-
-                execlp("./calculate_score", "calculate_score", entry->d_name, NULL);
-                perror("execlp");
-                exit(1);
-            } else if (pid > 0) {
-                close(pfd[1]); // Parent reads
-                waitpid(pid, NULL, 0);
-                print_from_pipe(pfd);
-                close(pfd[0]);
-            }
-        }
-    closedir(dir);
-}*/
-
 void calc_scores_for_each(char* path){
     int pfd[2];
     if (pipe(pfd) == -1) {
@@ -185,15 +126,15 @@ void calc_scores_for_each(char* path){
     }
     pid_t pid = fork();
     if (pid == 0) {
-    close(pfd[0]); // Child writes
-    dup2(pfd[1], STDOUT_FILENO);
-    close(pfd[1]);
+        close(pfd[0]); // Child writes
+        dup2(pfd[1], STDOUT_FILENO);
+        close(pfd[1]);
 
-    ensure_compiled("calculate_score");
+        ensure_compiled("calculate_score");
 
-    execlp("./calculate_score", "calculate_score", path, NULL);
-    perror("execlp");
-    exit(1);
+        execlp("./calculate_score", "calculate_score", path, NULL);
+        perror("execlp");
+        exit(1);
     } else if (pid > 0) {
         close(pfd[1]); // Parent reads
         waitpid(pid, NULL, 0);
@@ -211,11 +152,13 @@ void function(char* hunt,option_list_or_score o){
         printf("%s with %d treasures\n",hunt, count_treasures(file_path));
     }
     else{
+        printf("For %s:\n",hunt);
         calc_scores_for_each(file_path);
     }
 }
 
 
+//General function used to parse hunts directory
 void parse_hunts_dir(option_list_or_score o){
     DIR* directory=opendir(HUNTS_DIR);
 
@@ -242,8 +185,7 @@ void parse_hunts_dir(option_list_or_score o){
 
         if(S_ISDIR(info.st_mode)){//in hunt directory
 
-            //printf("rr entry->d_name %s\n",entry->d_name);
-            
+            //function that does different things with the parsed directories
             function(entry->d_name,o);
         }
         
@@ -254,44 +196,6 @@ void parse_hunts_dir(option_list_or_score o){
 }
 
 
-//Parse hunts directory
-/*void list_hunts(){
-    DIR* directory=opendir(HUNTS_DIR);
-
-    if(directory==NULL){
-        printf("Error opening hunts directory\n");
-        exit(2);
-    }
-
-    printf("Hunts:\n");
-
-    struct dirent* entry;
-    char file_path[MAX_PATH*2];
-    struct stat info;
-
-    while((entry=readdir(directory))){
-        if(strcmp(entry->d_name,".")==0 || strcmp(entry->d_name,"..")==0){
-            continue;
-        }
-
-        snprintf(file_path,sizeof(file_path),"%s/%s",HUNTS_DIR,entry->d_name);
-
-        if(lstat(file_path,&info)<0){
-            printf("Error with lstat\n");
-            exit(2);
-        }
-
-        if(S_ISDIR(info.st_mode)){//in hunt directory
-
-            //open treasure.bin + count treasures
-            printf("%s with %d treasures\n",entry->d_name, count_treasures(entry->d_name));
-        }
-        
-
-    }
-
-    closedir(directory);
-}*/
 
 void process_command() {
     FILE* f = fopen(CMD_FILE, "r");

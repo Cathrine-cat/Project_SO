@@ -1,26 +1,9 @@
-// score_calculator.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
-
-#define MAX_PATH 256 //max size of file path
-#define MAX_USERNAME 40
-#define MAX_CLUE 100
-#define HUNTS_DIR "hunts" //name of hunts directory
-#define TREASURE_FILE "treasure.bin" //name of treasure file in each hunt
-
-typedef struct _treasure {
-    int id;
-    char username[MAX_USERNAME];
-    struct gps_coord {
-        float latitude;
-        float longitude;
-    } gps;
-    char clue[MAX_CLUE];
-    int value;
-} treasure;
+#include "treasure.h"
 
 typedef struct {
     char username[MAX_USERNAME];
@@ -38,7 +21,14 @@ int main(int argc, char* argv[]) {
     }
 
     treasure t;
-    user_score scores[MAX_USERS];
+    //user_score scores[MAX_USERS];
+    user_score* scores=(user_score*)malloc(sizeof(user_score));
+
+    if(!scores){
+        perror("malloc failed");
+        return 1;
+    }
+
     int num_users = 0;
 
     while (read(fd, &t, sizeof(t)) == sizeof(t)) {
@@ -51,6 +41,16 @@ int main(int argc, char* argv[]) {
             }
         }
         if (!found && num_users < MAX_USERS) {
+
+            user_score* tmp=(user_score*)realloc(scores,sizeof(user_score)*(num_users+1));
+            if(!tmp){
+                perror("realloc failed");
+                free(scores);
+                return 1;
+            }
+
+            scores=tmp;
+
             strncpy(scores[num_users].username, t.username, MAX_USERNAME);
             scores[num_users].score = t.value;
             num_users++;
@@ -62,6 +62,8 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < num_users; ++i) {
         printf("%s: %d\n", scores[i].username, scores[i].score);
     }
+
+    free(scores);
 
     return 0;
 }
